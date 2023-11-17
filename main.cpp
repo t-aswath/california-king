@@ -1,19 +1,12 @@
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/Graphics/Drawable.hpp>
-#include <SFML/Graphics/Image.hpp>
-#include <SFML/Graphics/Rect.hpp>
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/Sprite.hpp>
-#include <SFML/Graphics/Texture.hpp>
+#include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/System/Vector2.hpp>
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/Mouse.hpp>
-#include <SFML/Window/WindowStyle.hpp>
-#include <bits/stdc++.h>
-#include <cctype>
-
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+#include <cmath>
+#include <chrono>
+#include <thread>
 
 #define initfen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 
@@ -64,6 +57,128 @@ void fenToBoard(std::string fen = initfen){
     }
 }
 
+void king(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+    if(x+1<8)moves.push_back(std::make_pair(x+1,y));
+    if(y+1<8)moves.push_back(std::make_pair(x,y+1));
+    if(x-1>=0)moves.push_back(std::make_pair(x-1,y));
+    if(y-1>=0)moves.push_back(std::make_pair(x,y-1));
+    if(x+1<8&&y+1<8)moves.push_back(std::make_pair(x+1,y+1));
+    if(x+1<8&&y-1>=0)moves.push_back(std::make_pair(x+1,y-1));
+    if(x-1>=0&&y+1<8)moves.push_back(std::make_pair(x-1,y+1));
+    if(x-1>=0&&y-1>=0)moves.push_back(std::make_pair(x-1,y-1));
+}
+
+void rook(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+    for(int i=x+1;i<8;i++){
+        moves.push_back(std::make_pair(i,y));
+    }
+    for(int i=y+1;i<8;i++){
+        moves.push_back(std::make_pair(x,i));
+    }
+    for(int i=0;i<x;i++){
+        moves.push_back(std::make_pair(i,y));
+    }
+    for(int i=0;i<y;i++){
+        moves.push_back(std::make_pair(x,i));
+    }
+}
+
+void bishop(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+    int tx=x+1,ty=y+1;
+    while(tx<8&&ty<8){
+        moves.push_back(std::make_pair(tx,ty));
+        tx++;ty++;
+    }
+    tx=x-1;ty=y-1;
+    while(tx>=0&&ty>=0){
+        moves.push_back(std::make_pair(tx,ty));
+        tx--;ty--;
+    }
+    tx=x-1;ty=y+1;
+    while(tx>=0&&ty<8){
+        moves.push_back(std::make_pair(tx,ty));
+        tx--;ty++;
+    }
+    tx=x+1;ty=y-1;
+    while(tx<8&&ty>=0){
+        moves.push_back(std::make_pair(tx,ty));
+        tx++;ty--;
+    }
+}
+
+void knight(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+    if(x+2<8&&y+1<8)moves.push_back(std::make_pair(x+2,y+1));
+    if(x+2<8&&y-1>=0)moves.push_back(std::make_pair(x+2,y-1));
+    if(x-2>=0&&y-1>=0)moves.push_back(std::make_pair(x-2,y-1));
+    if(x-2>=0&&y+1<8)moves.push_back(std::make_pair(x-2,y+1));
+    if(x-1>=0&&y+2<8)moves.push_back(std::make_pair(x-1,y+2));
+    if(x-1>=0&&y-2>=0)moves.push_back(std::make_pair(x-1,y-2));
+    if(x+1<8&&y+2<8)moves.push_back(std::make_pair(x+1,y+2));
+    if(x+1<8&&y-2>=0)moves.push_back(std::make_pair(x+1,y-2));
+}
+
+void pawn(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+    if(!p.white){
+        if(y==6){
+            moves.push_back(std::make_pair(x,y-2));
+        }
+        if(y-1>=0){
+            moves.push_back(std::make_pair(x,y-1));
+        }
+    }
+    else{
+        if(y==1){
+            moves.push_back(std::make_pair(x,y+2));
+        }
+        if(y+1<8){
+            moves.push_back(std::make_pair(x,y+1));
+        }
+
+    }
+
+}
+
+void movepiece(int x,int y,int i,int j){
+    int nx = x/100;
+    int ny = y/100;
+    board[i][j].piece.setPosition(sf::Vector2f((100*nx)+5,(100*ny)+5));
+}
+
+void movehint(sf::RenderWindow& window,Pieces p,int x,int y){
+    std::vector<std::pair<int,int>>moves;
+    x=x/100;
+    y=y/100;
+    moves.push_back(std::make_pair(x,y));
+    switch(p.val){
+
+        case 0:
+            king(moves,p,x,y);
+            break;
+        case 1:
+            rook(moves,p,x,y);
+            bishop(moves,p,x,y);
+            break;
+        case 2:
+            bishop(moves,p,x,y);
+            break;
+        case 3:
+            knight(moves,p,x,y);
+            break;
+        case 4:
+            rook(moves,p,x,y);
+            break;
+        case 5:
+            pawn(moves,p,x,y);
+            break;
+    }
+    for(std::pair<int,int>m:moves){
+            sf::CircleShape hint(10);
+            hint.setFillColor(sf::Color::Red);
+            hint.setPosition(sf::Vector2f((100*m.first)+40,(100*m.second)+40));
+            window.draw(hint);
+    }
+}
+
 int main(){
 
     // create the window
@@ -85,6 +200,7 @@ int main(){
     //piece & control
     bool move=false;
     int x,y;
+    double mx,my;
     
     //init board && assign texture
     fenToBoard();
@@ -112,6 +228,7 @@ int main(){
                         for(int j=0;j<8;j++){
                             if(board[i][j].piece.getGlobalBounds().contains(mpos.x,mpos.y)){
                                 move=true;
+                                mx=mpos.x;my=mpos.y;
                                 x=i;y=j;
                             }
                         }
@@ -122,13 +239,9 @@ int main(){
             if(event.type == sf::Event::MouseButtonReleased){
                 if(event.mouseButton.button == sf::Mouse::Left){
                     move=false;
+                    movepiece(mpos.x,mpos.y,x,y);
                 }
             }
-        }
-
-        //piece movement
-        if(move){
-            board[x][y].piece.setPosition(mpos.x-45,mpos.y-45);
         }
 
         //window draw
@@ -140,7 +253,13 @@ int main(){
                     window.draw(board[i][j].piece);
                 }
             }
-        }    
+        }      
+
+        //piece movement
+        if(move){
+            movehint(window,board[x][y],mx,my);
+            board[x][y].piece.setPosition(sf::Vector2f(mpos.x-45,mpos.y-45));
+        }  
         window.display();
     }
     return 0;
