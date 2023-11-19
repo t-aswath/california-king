@@ -1,14 +1,20 @@
+#include <SFML/Audio/Sound.hpp>
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/CircleShape.hpp>
-#include <SFML/System/Vector2.hpp>
+#include <SFML/Audio.hpp>
+#include <algorithm>
 #include <iostream>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include <cmath>
 #include <chrono>
 #include <thread>
 
 #define initfen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+
+static bool turn = true;
+static bool wcastling = true;
+static bool bcastling = true;
 
 
 class Pieces{
@@ -17,22 +23,25 @@ class Pieces{
         bool hasPiece;
         int val;
         bool white;
-        void fenToBoard(std::string fen = initfen);
-        void pieceLoader(int white,int type,int r,int c);
+        Pieces() : hasPiece(false), val(0), white(false){}
+        Pieces(sf::Sprite s,bool hp,int v,bool w){
+            this->hasPiece=hp;
+            this->val=v;
+            this->piece=s;
+            this->white=w;
+        }
 };
 
 Pieces board[8][8];
+
+std::vector<std::pair<int,int>>moves;
 
 void pieceLoader(int white,int type,int r,int c){
     sf::Sprite piece;
     piece.setTextureRect(sf::IntRect(type*45,45*white,45,45));
     piece.setPosition(sf::Vector2f((100*r)+5,(100*c)+5));
     piece.setScale(sf::Vector2f(2,2));
-    board[r][c] = Pieces();
-    board[r][c].white = white;
-    board[r][c].val = type;
-    board[r][c].hasPiece = true;
-    board[r][c].piece = piece;
+    board[r][c] = Pieces(piece,true,type,white);
 }
 
 void fenToBoard(std::string fen = initfen){
@@ -57,125 +66,253 @@ void fenToBoard(std::string fen = initfen){
     }
 }
 
-void king(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
-    if(x+1<8)moves.push_back(std::make_pair(x+1,y));
-    if(y+1<8)moves.push_back(std::make_pair(x,y+1));
-    if(x-1>=0)moves.push_back(std::make_pair(x-1,y));
-    if(y-1>=0)moves.push_back(std::make_pair(x,y-1));
-    if(x+1<8&&y+1<8)moves.push_back(std::make_pair(x+1,y+1));
-    if(x+1<8&&y-1>=0)moves.push_back(std::make_pair(x+1,y-1));
-    if(x-1>=0&&y+1<8)moves.push_back(std::make_pair(x-1,y+1));
-    if(x-1>=0&&y-1>=0)moves.push_back(std::make_pair(x-1,y-1));
+void king(Pieces& p,int x,int y){
+    int move[][2]={{x+1,y},{x,y+1},{x-1,y},{x,y-1},{x+1,y+1},{x+1,y-1},{x-1,y+1},{x-1,y-1}};
+    for(int i=0;i<8;i++){
+        if(move[i][0]>=0&&move[i][0]<8&&move[i][1]>=0&&move[i][1]<8){
+            if(board[move[i][0]][move[i][1]].hasPiece&&p.white!=board[move[i][0]][move[i][1]].white||!board[move[i][0]][move[i][1]].hasPiece){
+                moves.push_back(std::make_pair(move[i][0],move[i][1]));
+            }
+        }
+    }
 }
 
-void rook(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+void rook(Pieces& p,int x,int y){
     for(int i=x+1;i<8;i++){
-        moves.push_back(std::make_pair(i,y));
+        if(board[i][y].hasPiece){
+            if(board[i][y].white!=p.white){
+                moves.push_back(std::make_pair(i,y));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(i,y));
+        }
     }
     for(int i=y+1;i<8;i++){
-        moves.push_back(std::make_pair(x,i));
+        if(board[x][i].hasPiece){
+            if(board[x][i].white!=p.white){
+                moves.push_back(std::make_pair(x,i));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(x,i));
+        }
     }
-    for(int i=0;i<x;i++){
-        moves.push_back(std::make_pair(i,y));
+    for(int i=x-1;i>=0;i--){
+        if(board[i][y].hasPiece){
+            if(board[i][y].white!=p.white){
+                moves.push_back(std::make_pair(i,y));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(i,y));
+        }
     }
-    for(int i=0;i<y;i++){
-        moves.push_back(std::make_pair(x,i));
+    for(int i=y-1;i>=0;i--){
+        if(board[x][i].hasPiece){
+            if(board[x][i].white!=p.white){
+                moves.push_back(std::make_pair(x,i));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(x,i));
+        }
     }
 }
 
-void bishop(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+void bishop(Pieces& p,int x,int y){
     int tx=x+1,ty=y+1;
     while(tx<8&&ty<8){
-        moves.push_back(std::make_pair(tx,ty));
-        tx++;ty++;
+        if(board[tx][ty].hasPiece){
+            if(board[tx][ty].white!=p.white){
+                moves.push_back(std::make_pair(tx,ty));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(tx,ty));
+            tx++;ty++;
+        }
     }
     tx=x-1;ty=y-1;
     while(tx>=0&&ty>=0){
-        moves.push_back(std::make_pair(tx,ty));
-        tx--;ty--;
+        if(board[tx][ty].hasPiece){
+            if(board[tx][ty].white!=p.white){
+                moves.push_back(std::make_pair(tx,ty));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(tx,ty));
+            tx--;ty--;
+        }
     }
     tx=x-1;ty=y+1;
     while(tx>=0&&ty<8){
-        moves.push_back(std::make_pair(tx,ty));
-        tx--;ty++;
+        if(board[tx][ty].hasPiece){
+            if(board[tx][ty].white!=p.white){
+                moves.push_back(std::make_pair(tx,ty));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(tx,ty));
+            tx--;ty++;
+        }
     }
     tx=x+1;ty=y-1;
     while(tx<8&&ty>=0){
-        moves.push_back(std::make_pair(tx,ty));
-        tx++;ty--;
+        if(board[tx][ty].hasPiece){
+            if(board[tx][ty].white!=p.white){
+                moves.push_back(std::make_pair(tx,ty));
+                break;
+            }
+            else{
+                break;
+            }
+        }
+        else{
+            moves.push_back(std::make_pair(tx,ty));
+            tx++;ty--;
+        }
     }
 }
 
-void knight(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
-    if(x+2<8&&y+1<8)moves.push_back(std::make_pair(x+2,y+1));
-    if(x+2<8&&y-1>=0)moves.push_back(std::make_pair(x+2,y-1));
-    if(x-2>=0&&y-1>=0)moves.push_back(std::make_pair(x-2,y-1));
-    if(x-2>=0&&y+1<8)moves.push_back(std::make_pair(x-2,y+1));
-    if(x-1>=0&&y+2<8)moves.push_back(std::make_pair(x-1,y+2));
-    if(x-1>=0&&y-2>=0)moves.push_back(std::make_pair(x-1,y-2));
-    if(x+1<8&&y+2<8)moves.push_back(std::make_pair(x+1,y+2));
-    if(x+1<8&&y-2>=0)moves.push_back(std::make_pair(x+1,y-2));
+void knight(Pieces& p,int x,int y){
+    int move[][2]={{x+2,y+1},{x+2,y-1},{x-2,y-1},{x-2,y+1},{x-1,y+2},{x-1,y-2},{x+1,y+2},{x+1,y-2}};
+    for(int i=0;i<8;i++){
+        if(move[i][0]>=0&&move[i][0]<8&&move[i][1]>=0&&move[i][1]<8){
+            if(board[move[i][0]][move[i][1]].hasPiece&&p.white!=board[move[i][0]][move[i][1]].white||!board[move[i][0]][move[i][1]].hasPiece){
+                moves.push_back(std::make_pair(move[i][0],move[i][1]));
+            }
+        }
+    }
 }
 
-void pawn(std::vector<std::pair<int,int>>& moves,Pieces& p,int x,int y){
+void pawn(Pieces& p,int x,int y){
     if(!p.white){
-        if(y==6){
-            moves.push_back(std::make_pair(x,y-2));
+        if(y-1>=0&&x+1<8&&board[x+1][y-1].hasPiece&&board[x+1][y-1].white!=p.white){
+            moves.push_back(std::make_pair(x+1,y-1));
         }
-        if(y-1>=0){
+        if(y-1>=0&&x-1<8&&board[x-1][y-1].hasPiece&&board[x-1][y-1].white!=p.white){
+            moves.push_back(std::make_pair(x-1,y-1));
+        }
+        if(y-1>=0&&!board[x][y-1].hasPiece){
             moves.push_back(std::make_pair(x,y-1));
+        }
+        else{
+            return;
+        }
+        if(y==6&&!board[x][y-2].hasPiece){
+            moves.push_back(std::make_pair(x,y-2));
         }
     }
     else{
-        if(y==1){
-            moves.push_back(std::make_pair(x,y+2));
+        if(y+1>=0&&x+1<8&&board[x+1][y+1].hasPiece&&board[x+1][y+1].white!=p.white){
+            moves.push_back(std::make_pair(x+1,y+1));
         }
-        if(y+1<8){
+        if(y+1>=0&&x-1<8&&board[x-1][y+1].hasPiece&&board[x-1][y+1].white!=p.white){
+            moves.push_back(std::make_pair(x-1,y+1));
+        }
+        if(y+1<8&&!board[x][y+1].hasPiece){
             moves.push_back(std::make_pair(x,y+1));
         }
-
+        else{
+            return;
+        }
+        if(y==1&&!board[x][y+2].hasPiece){
+            moves.push_back(std::make_pair(x,y+2));
+        }
     }
-
-}
-
-void movepiece(int x,int y,int i,int j){
-    int nx = x/100;
-    int ny = y/100;
-    board[i][j].piece.setPosition(sf::Vector2f((100*nx)+5,(100*ny)+5));
 }
 
 void movehint(sf::RenderWindow& window,Pieces p,int x,int y){
-    std::vector<std::pair<int,int>>moves;
     x=x/100;
     y=y/100;
     moves.push_back(std::make_pair(x,y));
     switch(p.val){
 
         case 0:
-            king(moves,p,x,y);
+            king(p,x,y);
             break;
         case 1:
-            rook(moves,p,x,y);
-            bishop(moves,p,x,y);
+            rook(p,x,y);
+            bishop(p,x,y);
             break;
         case 2:
-            bishop(moves,p,x,y);
+            bishop(p,x,y);
             break;
         case 3:
-            knight(moves,p,x,y);
+            knight(p,x,y);
             break;
         case 4:
-            rook(moves,p,x,y);
+            rook(p,x,y);
             break;
         case 5:
-            pawn(moves,p,x,y);
+            pawn(p,x,y);
             break;
     }
     for(std::pair<int,int>m:moves){
+            if(m.first==x&&m.second==y)continue;
             sf::CircleShape hint(10);
-            hint.setFillColor(sf::Color::Red);
+            hint.setOutlineThickness(2.f);
+            hint.setOutlineColor(sf::Color(255,255,255));
+            hint.setFillColor(sf::Color(108,111,125,20));
             hint.setPosition(sf::Vector2f((100*m.first)+40,(100*m.second)+40));
             window.draw(hint);
+    }
+}
+
+int movepiece(int x,int y,int i,int j){
+    int nx = x/100;
+    int ny = y/100;
+    int cap =1;
+    if(nx==i&&ny==j){
+        board[i][j].piece.setPosition(sf::Vector2f((100*i)+5,(100*j)+5));
+        moves.clear();
+        return 0;
+    }
+    else{
+        if(std::find(moves.begin(),moves.end(),std::make_pair(nx,ny))!=moves.end()){
+            Pieces temp = board[i][j];
+            if(temp.hasPiece)cap+=1;
+            board[i][j]=Pieces();
+            board[nx][ny]= temp;
+            board[nx][ny].piece.setPosition(sf::Vector2f((100*nx)+5,(100*ny)+5));
+            turn = !turn;
+            moves.clear();
+            return cap;
+        }
+        else{
+            board[i][j].piece.setPosition(sf::Vector2f((100*i)+5,(100*j)+5));
+            moves.clear();
+            return 0;
+        }
     }
 }
 
@@ -196,6 +333,20 @@ int main(){
     bTexture.setSmooth(true);
     pTexture.setSmooth(true);
     sf::Sprite Sboard(bTexture);
+
+    //loading sounds
+    sf::SoundBuffer movebuffer;
+    sf::SoundBuffer capbuffer;
+    if(!movebuffer.loadFromFile("./move-self.wav")){
+        std::cout<<"unable to load audio";
+    }
+    if(!capbuffer.loadFromFile("./capture.wav")){
+        std::cout<<"unable to load audio";
+    }
+    sf::Sound moveaudio;
+    sf::Sound capaudio;
+    moveaudio.setBuffer(movebuffer);
+    capaudio.setBuffer(capbuffer);
 
     //piece & control
     bool move=false;
@@ -223,13 +374,15 @@ int main(){
                 window.close();
 
             if(event.type == sf::Event::MouseButtonPressed){
-                if(event.mouseButton.button == sf::Mouse::Left){
+                if(event.mouseButton.button == sf::Mouse::Left&&!move){
                     for(int i=0;i<8;i++){
                         for(int j=0;j<8;j++){
                             if(board[i][j].piece.getGlobalBounds().contains(mpos.x,mpos.y)){
-                                move=true;
-                                mx=mpos.x;my=mpos.y;
-                                x=i;y=j;
+                                if(!board[i][j].white&&turn||board[i][j].white&&!turn){
+                                    move=true;
+                                    mx=mpos.x;my=mpos.y;
+                                    x=i;y=j;
+                                }
                             }
                         }
                     }
@@ -237,9 +390,21 @@ int main(){
             }
 
             if(event.type == sf::Event::MouseButtonReleased){
-                if(event.mouseButton.button == sf::Mouse::Left){
+                if(event.mouseButton.button == sf::Mouse::Left&&move){
                     move=false;
-                    movepiece(mpos.x,mpos.y,x,y);
+                    int mp = movepiece(mpos.x,mpos.y,x,y);
+                    if(mp==1){
+                        moveaudio.play(); 
+                    }
+                    if(mp==2){
+                        capaudio.play();
+                    }
+                    // for(int i=0;i<8;i++){
+                    //     for(int j=0;j<8;j++){
+                    //         std::cout<<board[i][j].hasPiece<<" ";
+                    //     }
+                    //     std::cout<<"\n";
+                    // }      
                 }
             }
         }
