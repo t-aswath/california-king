@@ -1,6 +1,7 @@
 #include <SFML/Audio.hpp>
 #include <SFML/Audio/Sound.hpp>
 #include <SFML/Graphics.hpp>
+#include <SFML/Window/Mouse.hpp>
 #include <algorithm>
 #include <iostream>
 #include <unordered_map>
@@ -9,23 +10,19 @@
 
 #define initfen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 
-static bool turn = true;
-static bool wcastling = true;
-static bool bcastling = true;
+static bool turn = 1;
+static bool wcastling = 1;
+static bool bcastling = 1;
 
 class Pieces {
 public:
-  sf::Sprite piece;
+  sf::Sprite *piece;
   bool hasPiece;
   int val;
   bool white;
-  Pieces() : hasPiece(false), val(0), white(false) {}
-  Pieces(sf::Sprite s, bool hp, int v, bool w) {
-    this->hasPiece = hp;
-    this->val = v;
-    this->piece = s;
-    this->white = w;
-  }
+  Pieces() : piece(nullptr), hasPiece(0), val(0), white(0) {}
+  Pieces(sf::Sprite *s, bool hp, int v, bool w)
+      : piece(s), val(v), hasPiece(hp), white(w) {}
 };
 
 Pieces board[8][8];
@@ -33,11 +30,12 @@ Pieces board[8][8];
 std::vector<std::pair<int, int>> moves;
 
 void pieceLoader(int white, int type, int r, int c) {
-  sf::Sprite piece;
-  piece.setTextureRect(sf::IntRect(type * 45, 45 * white, 45, 45));
-  piece.setPosition(sf::Vector2f((100 * r) + 5, (100 * c) + 5));
-  piece.setScale(sf::Vector2f(2, 2));
-  board[r][c] = Pieces(piece, true, type, white);
+  sf::Sprite *piece;
+  piece->setTextureRect(
+      sf::IntRect(sf::Vector2i{type * 45, 45 * white}, sf::Vector2i{45, 45}));
+  piece->setPosition(sf::Vector2f((100 * r) + 5, (100 * c) + 5));
+  piece->setScale(sf::Vector2f(2, 2));
+  board[r][c] = Pieces(piece, 1, type, white);
 }
 
 void fenToBoard(std::string fen = initfen) {
@@ -291,7 +289,7 @@ int movepiece(int x, int y, int i, int j) {
   int ny = y / 100;
   int cap = 1;
   if (nx == i && ny == j) {
-    board[i][j].piece.setPosition(sf::Vector2f((100 * i) + 5, (100 * j) + 5));
+    board[i][j].piece->setPosition(sf::Vector2f((100 * i) + 5, (100 * j) + 5));
     moves.clear();
     return 0;
   } else {
@@ -302,13 +300,14 @@ int movepiece(int x, int y, int i, int j) {
         cap += 1;
       board[i][j] = Pieces();
       board[nx][ny] = temp;
-      board[nx][ny].piece.setPosition(
+      board[nx][ny].piece->setPosition(
           sf::Vector2f((100 * nx) + 5, (100 * ny) + 5));
       turn = !turn;
       moves.clear();
       return cap;
     } else {
-      board[i][j].piece.setPosition(sf::Vector2f((100 * i) + 5, (100 * j) + 5));
+      board[i][j].piece->setPosition(
+          sf::Vector2f((100 * i) + 5, (100 * j) + 5));
       moves.clear();
       return 0;
     }
@@ -318,7 +317,7 @@ int movepiece(int x, int y, int i, int j) {
 int main() {
 
   // create the window
-  sf::RenderWindow window(sf::VideoMode(1000, 800), "california king");
+  sf::RenderWindow window(sf::VideoMode({1000, 800}), "california king");
 
   // loading texture
   sf::Texture bTexture;
@@ -329,8 +328,8 @@ int main() {
   if (!pTexture.loadFromFile("../Sprite.png")) {
     std::cout << "unable to load piece texture";
   }
-  bTexture.setSmooth(true);
-  pTexture.setSmooth(true);
+  bTexture.setSmooth(1);
+  pTexture.setSmooth(1);
   sf::Sprite Sboard(bTexture);
 
   // loading sounds
@@ -342,13 +341,13 @@ int main() {
   if (!capbuffer.loadFromFile("../capture.wav")) {
     std::cout << "unable to load audio";
   }
-  sf::Sound moveaudio;
-  sf::Sound capaudio;
-  moveaudio.setBuffer(movebuffer);
-  capaudio.setBuffer(capbuffer);
+  // sf::Sound *moveaudio = nullptr;
+  // sf::Sound *capaudio = nullptr;
+  // moveaudio->setBuffer(movebuffer);
+  // capaudio->setBuffer(capbuffer);
 
   // piece & control
-  bool move = false;
+  bool move = 0;
   int x, y;
   double mx, my;
 
@@ -357,31 +356,29 @@ int main() {
   for (int i = 0; i < 8; i++) {
     for (int j = 0; j < 8; j++) {
       if (board[i][j].hasPiece) {
-        board[i][j].piece.setTexture(pTexture);
+        board[i][j].piece->setTexture(pTexture);
       }
     }
   }
 
   // window handling
   while (window.isOpen()) {
-    sf::Event event;
     sf::Vector2i mpos = sf::Mouse::getPosition(window);
 
-    // change if you need - rahul
-    mpos = {mpos.x, mpos.y - 250};
     // events
-    while (window.pollEvent(event)) {
-      if (event.type == sf::Event::Closed)
+    while (const std::optional event = window.pollEvent()) {
+      if (event->is<sf::Event::Closed>())
         window.close();
 
-      if (event.type == sf::Event::MouseButtonPressed) {
-        if (event.mouseButton.button == sf::Mouse::Left && !move) {
+      if (event->is<sf::Event::MouseButtonPressed>()) {
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) && !move) {
           for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
-              if (board[i][j].piece.getGlobalBounds().contains(mpos.x,
-                                                               mpos.y)) {
+              if (board[i][j].piece->getGlobalBounds().contains(
+                      {static_cast<float>(mpos.x),
+                       static_cast<float>(mpos.y)})) {
                 if (!board[i][j].white && turn || board[i][j].white && !turn) {
-                  move = true;
+                  move = 1;
                   mx = mpos.x;
                   my = mpos.y;
                   x = i;
@@ -393,16 +390,16 @@ int main() {
         }
       }
 
-      if (event.type == sf::Event::MouseButtonReleased) {
-        if (event.mouseButton.button == sf::Mouse::Left && move) {
-          move = false;
+      if (event->is<sf::Event::MouseButtonReleased>()) {
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
+          move = 0;
           int mp = movepiece(mpos.x, mpos.y, x, y);
-          if (mp == 1) {
-            moveaudio.play();
-          }
-          if (mp == 2) {
-            capaudio.play();
-          }
+          // if (mp == 1) {
+          //   moveaudio->play();
+          // }
+          // if (mp == 2) {
+          //   capaudio->play();
+          // }
           // for(int i=0;i<8;i++){
           //     for(int j=0;j<8;j++){
           //         std::cout<<board[i][j].hasPiece<<" ";
@@ -416,10 +413,11 @@ int main() {
     // window draw
     window.clear();
     window.draw(Sboard);
+
     for (int i = 0; i < 8; i++) {
       for (int j = 0; j < 8; j++) {
         if (board[i][j].hasPiece) {
-          window.draw(board[i][j].piece);
+          window.draw(*board[i][j].piece);
         }
       }
     }
@@ -427,7 +425,8 @@ int main() {
     // piece movement
     if (move) {
       movehint(window, board[x][y], mx, my);
-      board[x][y].piece.setPosition(sf::Vector2f(mpos.x - 45, mpos.y - 45));
+      board[x][y].piece->setPosition(
+          sf::Vector2f(static_cast<float>(mpos.x) - 45, mpos.y - 45));
     }
     window.display();
   }
